@@ -1,0 +1,8 @@
+# testing
+pytest
+pytest-cov
+
+# common
+ndg-httpsclient
+pyopenssl
+pyasn1
