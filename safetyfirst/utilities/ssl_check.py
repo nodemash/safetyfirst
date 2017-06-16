@@ -21,6 +21,7 @@ class SSLCheck(SafetyFirstUtility):
         pass
 
 
+
 def launch_new_instance():
     """
     Helper for launching

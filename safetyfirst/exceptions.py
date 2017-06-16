@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
 class CustomException(Exception):
     """
     A base exception that handles pretty-printing errors for command-line tools.
@@ -14,3 +15,10 @@ class CustomException(Exception):
 
     def __str__(self):
         return self.msg
+
+
+class HostnameWrongError(CustomException):
+    """
+    Exception raised when given hostname is wrong
+    """
+    pass

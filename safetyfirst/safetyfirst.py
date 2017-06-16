@@ -4,12 +4,15 @@
 """
 The safetyfirst base module
 """
+# Futures => UTF-8/Unicode
+from __future__ import unicode_literals
+from __future__ import absolute_import
 
 import ssl
 import pytz
 import OpenSSL
 import socket
-import pprint
+import re
 
 from datetime import datetime
 from ndg.httpsclient.subj_alt_name import SubjectAltName as BaseSubjectAltName
@@ -17,6 +20,7 @@ from pyasn1.codec.der import decoder as der_decoder
 from pyasn1.type import univ, constraint
 import pyasn1
 
+from safetyfirst.exceptions import HostnameWrongError
 
 # Note: This is a slightly bug-fixed version of same from ndg-httpsclient.
 class SubjectAltName(BaseSubjectAltName):
@@ -34,9 +38,12 @@ class SubjectAltName(BaseSubjectAltName):
 
 
 class SafetyFirst(object):
+    """
+    The main class of SafetyFirst
+    """
 
     DEFAULT_SUBJECT_ALTERNATE_NAME = 'subjectAltName'
-    ssl_default_method = ssl.PROTOCOL_TLSv1_2
+    SSL_DEFAULT_METHOD = ssl.PROTOCOL_TLSv1_2
 
     def __init__(self, ssl_method=None):
         """
@@ -47,7 +54,31 @@ class SafetyFirst(object):
         """
 
         if ssl_method:
-            self.ssl_default_method = ssl_method
+            self.SSL_DEFAULT_METHOD = ssl_method
+
+    def is_valid_hostname(self, hostname):
+        """
+        check if we have a valid hostname
+
+        :param hostname:
+        :return:
+        """
+
+        if hostname[-1] == ".":
+            # strip exactly one dot from the right, if present
+            hostname = hostname[:-1]
+
+        if len(hostname) > 253:
+            return False
+
+        labels = hostname.split(".")
+
+        # the TLD must be not all-numeric
+        if re.match(r"[0-9]+$", labels[-1]):
+            return False
+
+        allowed = re.compile(r"(?!-)[a-z0-9-]{1,63}(?<!-)$", re.IGNORECASE)
+        return all(allowed.match(label) for label in labels)
 
     def get_subj_alt_name(self, peer_cert):
         """
@@ -93,24 +124,27 @@ class SafetyFirst(object):
 
         :param host: str, A remote address or host name
         :param tlsext_host_name: str, the host name for SNI
+        :param timeout: int timeout for connecting to a host
         :return:
         """
 
-        # init variables
-        x509 = None
-
         # build the connection
-        ctx = OpenSSL.SSL.Context(method=self.ssl_default_method)
+        ctx = OpenSSL.SSL.Context(method=self.SSL_DEFAULT_METHOD)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        s.connect((host, 443))
+        try:
+            s.connect((host, 443))
+
+        except UnicodeError:
+            raise HostnameWrongError('The given hostname: {} is wrong'.format(str(host)))
+
         cnx = OpenSSL.SSL.Connection(ctx, s)
 
         # tlsext_host_name can be different to the connecting host
         if tlsext_host_name:
-            cnx.set_tlsext_host_name(tlsext_host_name)
+            cnx.set_tlsext_host_name(bytes(tlsext_host_name))
         else:
-            cnx.set_tlsext_host_name(host)
+            cnx.set_tlsext_host_name(bytes(host))
 
         cnx.set_connect_state()
         cnx.do_handshake()
